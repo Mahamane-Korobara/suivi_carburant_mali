@@ -5,10 +5,16 @@ use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\Auth\StationAuthController;
 use App\Http\Controllers\Admin\StationRequestController;
 use App\Http\Controllers\StationController;
+use App\Http\Controllers\Admin\DashboardExportController;
+
+
+// Pour les usagers
+Route::get('/public/stations', [StationController::class, 'index']);
+Route::get('/public/stations/{id}', [StationController::class, 'show']);
 
 // --- Auth Admin ---
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
-    Route::get('/admin/stations/export', [StationRequestController::class, 'export']);
+    Route::get('/admin/stations/export', [DashboardExportController::class, 'export']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/logout', [AdminAuthController::class, 'logout']);

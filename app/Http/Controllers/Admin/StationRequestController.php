@@ -7,8 +7,8 @@ use App\Models\Station;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
-use App\Exports\StationsExport;
-use Maatwebsite\Excel\Facades\Excel;
+use App\Models\StationVisit;
+use Carbon\Carbon;
 
 class StationRequestController extends Controller
 {
@@ -52,6 +52,37 @@ class StationRequestController extends Controller
         ]);
     }
 
+    public function analytics(Request $request)
+    {
+        $start = Carbon::now()->subDays(7); // 7 derniers jours
+
+        $stats = [
+            'most_viewed' => StationVisit::selectRaw('station_id, COUNT(*) as total')
+                ->where('visited_at', '>=', $start)
+                ->groupBy('station_id')
+                ->orderByDesc('total')
+                ->with('station:id,name,commune,quartier')
+                ->take(5)
+                ->get(),
+
+            'visits_per_hour' => StationVisit::selectRaw('HOUR(visited_at) as hour, COUNT(*) as total')
+                ->groupBy('hour')
+                ->orderBy('hour')
+                ->get(),
+
+            'visits_per_commune' => StationVisit::selectRaw('commune, COUNT(*) as total')
+                ->groupBy('commune')
+                ->orderByDesc('total')
+                ->get(),
+
+            'visits_per_quartier' => StationVisit::selectRaw('quartier, COUNT(*) as total')
+                ->groupBy('quartier')
+                ->orderByDesc('total')
+                ->get(),
+        ];
+
+        return response()->json($stats);
+    }
 
     public function history($id)
     {
@@ -152,12 +183,5 @@ class StationRequestController extends Controller
         });
 
         return response()->json(['message' => 'Station refusée avec succès.']);
-    }
-
-    public function export(Request $request)
-    {
-        $filters = $request->only(['commune', 'status']);
-
-        return Excel::download(new StationsExport($filters), 'stations_export.csv');
     }
 }

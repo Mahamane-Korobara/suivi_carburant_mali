@@ -21,6 +21,8 @@ class Station extends Authenticatable
         'email',
         'type',
         'status',
+        'latitude',
+        'longitude',
         'rejection_reason',
         'is_active',
         'password',
@@ -37,4 +39,15 @@ class Station extends Authenticatable
     {
         return $this->hasOne(StationStatus::class)->latestOfMany();
     }
+
+    public function visits()
+    {
+        return $this->hasMany(StationVisit::class);
+    }
+
+        public function reports()
+    {
+        return $this->hasMany(Report::class);
+    }
+
 }
