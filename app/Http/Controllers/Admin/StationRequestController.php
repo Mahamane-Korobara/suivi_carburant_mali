@@ -7,10 +7,12 @@ use App\Models\Station;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use App\Exports\StationsExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StationRequestController extends Controller
 {
-    public function index(Request $request)
+   public function index(Request $request)
     {
         $stations = Station::with('lastStatus')
             ->when($request->has('commune'), fn($q) => $q->where('commune', $request->commune))
@@ -22,14 +24,34 @@ class StationRequestController extends Controller
                     'id' => $station->id,
                     'name' => $station->name,
                     'commune' => $station->commune,
+                    'type' => $station->type,
                     'status' => $station->lastStatus?->status ?? 'inconnu',
                     'updated_at' => $station->lastStatus?->created_at ?? $station->updated_at,
+                    'latitude' => $station->latitude,
+                    'longitude' => $station->longitude,
                     'is_active' => $station->status === 'approved',
                 ];
             });
 
         return response()->json($stations);
     }
+
+    public function stats()
+    {
+        $total = Station::count();
+        $approved = Station::where('status', 'approved')->count();
+        $rejected = Station::where('status', 'rejected')->count();
+        $pending = Station::where('status', 'pending')->count();
+
+        return response()->json([
+            'total' => $total,
+            'approved' => $approved,
+            'rejected' => $rejected,
+            'pending' => $pending,
+            'last_update' => Station::max('updated_at'),
+        ]);
+    }
+
 
     public function history($id)
     {
@@ -130,5 +152,12 @@ class StationRequestController extends Controller
         });
 
         return response()->json(['message' => 'Station refusée avec succès.']);
+    }
+
+    public function export(Request $request)
+    {
+        $filters = $request->only(['commune', 'status']);
+
+        return Excel::download(new StationsExport($filters), 'stations_export.csv');
     }
 }

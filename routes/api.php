@@ -8,6 +8,8 @@ use App\Http\Controllers\StationController;
 
 // --- Auth Admin ---
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
+    Route::get('/admin/stations/export', [StationRequestController::class, 'export']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/logout', [AdminAuthController::class, 'logout']);
     Route::get('/admin/stations', [StationRequestController::class, 'index']);
@@ -16,6 +18,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/stations/{id}/reactivate', [StationRequestController::class, 'reactivate']);
     Route::post('/admin/stations/{id}/approve', [StationRequestController::class, 'approve']);
     Route::post('/admin/stations/{id}/reject', [StationRequestController::class, 'reject']);
+    // Route::get('/admin/stations/export', [StationRequestController::class, 'export']);
+    Route::get('/admin/stations/stats', [StationRequestController::class, 'stats']);
 });
 
 // --- Auth Station ---
