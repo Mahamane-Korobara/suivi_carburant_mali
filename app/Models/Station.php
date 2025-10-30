@@ -9,7 +9,7 @@ use Laravel\Sanctum\HasApiTokens;
 
 class Station extends Authenticatable
 {
-    use HasFactory;
+    use HasFactory, HasApiTokens;
 
     protected $fillable = [
         'name',
@@ -22,8 +22,19 @@ class Station extends Authenticatable
         'type',
         'status',
         'rejection_reason',
+        'is_active',
         'password',
     ];
 
     protected $hidden = ['password'];
+
+     public function statuses()
+    {
+        return $this->hasMany(StationStatus::class);
+    }
+
+    public function lastStatus()
+    {
+        return $this->hasOne(StationStatus::class)->latestOfMany();
+    }
 }

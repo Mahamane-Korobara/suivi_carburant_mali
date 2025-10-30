@@ -11,6 +11,9 @@ Route::post('/admin/login', [AdminAuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/logout', [AdminAuthController::class, 'logout']);
     Route::get('/admin/stations', [StationRequestController::class, 'index']);
+    Route::get('/admin/stations/{id}/history', [StationRequestController::class, 'history']);
+    Route::post('/admin/stations/{id}/disable', [StationRequestController::class, 'disable']);
+    Route::post('/admin/stations/{id}/reactivate', [StationRequestController::class, 'reactivate']);
     Route::post('/admin/stations/{id}/approve', [StationRequestController::class, 'approve']);
     Route::post('/admin/stations/{id}/reject', [StationRequestController::class, 'reject']);
 });
