@@ -8,7 +8,7 @@ class StoreStationRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // Autoriser tout le monde à envoyer une demande d'inscription
+        // Tout le monde peut faire une demande d'inscription
         return true;
     }
 
@@ -22,7 +22,9 @@ class StoreStationRequest extends FormRequest
             'gerant_name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
             'email' => 'required|email|unique:stations,email',
-            'type' => 'required|string|max:255',
+            // Le champ 'fuel_types' est maintenant un tableau d’IDs
+            'fuel_types' => 'required|array|min:1',
+            'fuel_types.*' => 'exists:fuel_types,id',
         ];
     }
 
@@ -37,7 +39,8 @@ class StoreStationRequest extends FormRequest
             'commune.required' => 'Le champ commune est obligatoire.',
             'gerant_name.required' => 'Le champ nom du gérant est obligatoire.',
             'phone.required' => 'Le champ téléphone est obligatoire.',
-            'type.required' => 'Le type de station est obligatoire.',
+            'fuel_types.required' => 'Vous devez sélectionner au moins un type de carburant.',
+            'fuel_types.*.exists' => 'Un type de carburant sélectionné est invalide.',
         ];
     }
 }

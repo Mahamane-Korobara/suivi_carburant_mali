@@ -19,7 +19,6 @@ class Station extends Authenticatable
         'gerant_name',
         'phone',
         'email',
-        'type',
         'status',
         'latitude',
         'longitude',
@@ -50,4 +49,8 @@ class Station extends Authenticatable
         return $this->hasMany(Report::class);
     }
 
+    public function fuelTypes()
+    {
+        return $this->belongsToMany(FuelType::class, 'fuel_type_pivot_station');
+    }
 }

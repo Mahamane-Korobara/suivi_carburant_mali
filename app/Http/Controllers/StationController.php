@@ -14,18 +14,20 @@ class StationController extends Controller
     use StationHelper;
     public function register(StoreStationRequest $request)
     {
-        // Récupération automatique des données validées
         $validated = $request->validated();
-
-        // Ajouter le statut par défaut
         $validated['status'] = 'pending';
 
-        // Création de la station
-        $station = Station::create($validated);
+        // Créer la station
+        $station = \App\Models\Station::create($validated);
+
+        // Associer les types de carburant sélectionnés
+        if (isset($validated['fuel_types'])) {
+            $station->fuelTypes()->sync($validated['fuel_types']);
+        }
 
         return response()->json([
             'message' => 'Demande envoyée avec succès. En attente de validation.',
-            'data' => $station,
+            'data' => $station->load('fuelTypes'),
         ], 201);
     }
 
