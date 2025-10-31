@@ -9,88 +9,108 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use App\Models\StationVisit;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
+use App\Helpers\StationHelper;
 
 class StationRequestController extends Controller
 {
-   public function index(Request $request)
+    use StationHelper;
+    public function index(Request $request)
     {
-        $stations = Station::with('lastStatus')
-            ->when($request->has('commune'), fn($q) => $q->where('commune', $request->commune))
-            ->when($request->has('status'), fn($q) => $q->where('status', $request->status))
-            ->orderBy($request->get('sort_by', 'created_at'), $request->get('sort_order', 'desc'))
-            ->get()
-            ->map(function ($station) {
-                return [
-                    'id' => $station->id,
-                    'name' => $station->name,
-                    'commune' => $station->commune,
-                    'type' => $station->type,
-                    'status' => $station->lastStatus?->status ?? 'inconnu',
-                    'updated_at' => $station->lastStatus?->created_at ?? $station->updated_at,
-                    'latitude' => $station->latitude,
-                    'longitude' => $station->longitude,
-                    'is_active' => $station->status === 'approved',
-                ];
-            });
+        $cacheKey = 'stations_list_' . md5(json_encode($request->all()));
+
+        $stations = Cache::remember($cacheKey, 300, function () use ($request) {
+            return Station::with('lastStatus')
+                ->when($request->has('commune'), fn($q) => $q->where('commune', $request->commune))
+                ->when($request->has('status'), fn($q) => $q->where('status', $request->status))
+                ->orderBy($request->get('sort_by', 'created_at'), $request->get('sort_order', 'desc'))
+                ->get()
+                ->map(function ($station) {
+                    return [
+                        'id' => $station->id,
+                        'name' => $station->name,
+                        'commune' => $station->commune,
+                        'type' => $station->type,
+                        'status' => $station->lastStatus?->status ?? 'inconnu',
+                        'updated_at' => $station->lastStatus?->created_at ?? $station->updated_at,
+                        'latitude' => $station->latitude,
+                        'longitude' => $station->longitude,
+                        'is_active' => $station->status === 'approved',
+                    ];
+                });
+        });
 
         return response()->json($stations);
     }
 
     public function stats()
     {
-        $total = Station::count();
-        $approved = Station::where('status', 'approved')->count();
-        $rejected = Station::where('status', 'rejected')->count();
-        $pending = Station::where('status', 'pending')->count();
+        $cacheKey = 'stations_stats';
 
-        return response()->json([
-            'total' => $total,
-            'approved' => $approved,
-            'rejected' => $rejected,
-            'pending' => $pending,
-            'last_update' => Station::max('updated_at'),
-        ]);
+        $stats = Cache::remember($cacheKey, 300, function () {
+            return [
+                'total' => Station::count(),
+                'approved' => Station::where('status', 'approved')->count(),
+                'rejected' => Station::where('status', 'rejected')->count(),
+                'pending' => Station::where('status', 'pending')->count(),
+                'last_update' => Station::max('updated_at'),
+            ];
+        });
+
+        return response()->json($stats);
     }
 
     public function analytics(Request $request)
     {
-        $start = Carbon::now()->subDays(7); // 7 derniers jours
+        $cacheKey = 'stations_analytics';
 
-        $stats = [
-            'most_viewed' => StationVisit::selectRaw('station_id, COUNT(*) as total')
-                ->where('visited_at', '>=', $start)
-                ->groupBy('station_id')
-                ->orderByDesc('total')
-                ->with('station:id,name,commune,quartier')
-                ->take(5)
-                ->get(),
+        $stats = Cache::remember($cacheKey, 300, function () {
+            return [
+                'most_viewed' => StationVisit::selectRaw('station_id, COUNT(*) as total')
+                    ->where('visited_at', '>=', Carbon::now()->subDays(7))
+                    ->groupBy('station_id')
+                    ->orderByDesc('total')
+                    ->with('station:id,name,commune,quartier')
+                    ->take(5)
+                    ->get(),
 
-            'visits_per_hour' => StationVisit::selectRaw('HOUR(visited_at) as hour, COUNT(*) as total')
-                ->groupBy('hour')
-                ->orderBy('hour')
-                ->get(),
+                'visits_per_hour' => StationVisit::selectRaw('HOUR(visited_at) as hour, COUNT(*) as total')
+                    ->groupBy('hour')
+                    ->orderBy('hour')
+                    ->get(),
 
-            'visits_per_commune' => StationVisit::selectRaw('commune, COUNT(*) as total')
-                ->groupBy('commune')
-                ->orderByDesc('total')
-                ->get(),
+                'visits_per_commune' => StationVisit::selectRaw('commune, COUNT(*) as total')
+                    ->groupBy('commune')
+                    ->orderByDesc('total')
+                    ->get(),
 
-            'visits_per_quartier' => StationVisit::selectRaw('quartier, COUNT(*) as total')
-                ->groupBy('quartier')
-                ->orderByDesc('total')
-                ->get(),
-        ];
+                'visits_per_quartier' => StationVisit::selectRaw('quartier, COUNT(*) as total')
+                    ->groupBy('quartier')
+                    ->orderByDesc('total')
+                    ->get(),
+            ];
+        });
 
         return response()->json($stats);
     }
 
     public function history($id)
     {
-        $station = Station::with('statuses')->findOrFail($id);
-        return response()->json([
-            'station' => $station->only(['id', 'name', 'commune']),
-            'history' => $station->statuses()->orderByDesc('created_at')->get(),
-        ]);
+        $cacheKey = "station_history_{$id}";
+
+        $data = Cache::remember($cacheKey, 600, function () use ($id) {
+            $station = Station::with('statuses')
+                ->findOrFail($id);
+
+            return [
+                'station' => $station->only(['id', 'name', 'commune']),
+                'history' => $station->statuses()
+                    ->orderByDesc('created_at')
+                    ->get(),
+            ];
+        });
+
+        return response()->json($data);
     }
 
     public function disable($id)
@@ -114,6 +134,7 @@ class StationRequestController extends Controller
                     ->subject('Votre compte a été désactivé');
         });
 
+        $this->bustStationCaches($station->id);
         return response()->json(['message' => 'Station désactivée avec succès.']);
     }
 
@@ -140,6 +161,7 @@ class StationRequestController extends Controller
                     ->subject('Réactivation de votre compte station');
         });
 
+        $this->bustStationCaches($station->id);
         return response()->json(['message' => 'Station réactivée avec succès.']);
     }
 
@@ -164,6 +186,7 @@ class StationRequestController extends Controller
                     ->subject('Approbation de votre compte station');
         });
 
+        $this->bustStationCaches($station->id);
         return response()->json(['message' => 'Station approuvée avec succès.']);
     }
 
@@ -182,6 +205,7 @@ class StationRequestController extends Controller
                     ->subject('Refus de votre demande');
         });
 
+        $this->bustStationCaches($station->id);
         return response()->json(['message' => 'Station refusée avec succès.']);
     }
 }

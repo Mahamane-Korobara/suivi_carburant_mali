@@ -6,9 +6,12 @@ use App\Http\Requests\StoreStationRequest;
 use App\Models\Station;
 use App\Models\StationVisit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use App\Helpers\StationHelper;
 
 class StationController extends Controller
 {
+    use StationHelper;
     public function register(StoreStationRequest $request)
     {
         // Récupération automatique des données validées
@@ -27,23 +30,30 @@ class StationController extends Controller
     }
 
     // Consultation des stations
-   public function index(Request $request)
+    public function index(Request $request)
     {
-        $sort = $request->get('sort', 'created_at'); // tri par défaut : date
-        $order = $request->get('order', 'desc');     // ordre par défaut : décroissant
+        $sort = $request->get('sort', 'created_at');
+        $order = $request->get('order', 'desc');
+        $cacheKey = "stations.index.$sort.$order";
 
-        $stations = Station::withCount('visits') // ajoute visits_count automatiquement
-            ->where('status', 'approved')        // seules les stations validées
-            ->orderBy($sort === 'visits' ? 'visits_count' : $sort, $order)
-            ->get();
+        // Cache 1 heure
+        $stations = Cache::remember($cacheKey, 3600, function () use ($sort, $order) {
+            return Station::withCount('visits')
+                ->where('status', 'approved')
+                ->orderBy($sort === 'visits' ? 'visits_count' : $sort, $order)
+                ->get();
+        });
 
         return response()->json($stations);
     }
 
-
-    public function show($id)
+   public function show($id)
     {
-        $station = Station::findOrFail($id);
+        $cacheKey = "station.$id";
+
+        $station = Cache::remember($cacheKey, 3600, function () use ($id) {
+            return Station::findOrFail($id);
+        });
 
         // Enregistre la visite
         StationVisit::create([
@@ -52,6 +62,9 @@ class StationController extends Controller
             'device' => request()->header('User-Agent'),
             'commune' => $station->commune,
         ]);
+
+        // On invalide juste le cache analytics, pas la station elle-même
+        Cache::forget('stations.analytics');
 
         return response()->json($station);
     }
