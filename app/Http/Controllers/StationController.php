@@ -38,36 +38,86 @@ class StationController extends Controller
         $order = $request->get('order', 'desc');
         $cacheKey = "stations.index.$sort.$order";
 
-        // Cache 1 heure
         $stations = Cache::remember($cacheKey, 3600, function () use ($sort, $order) {
-            return Station::withCount('visits')
+            return Station::with(['statuses.fuelType'])
                 ->where('status', 'approved')
+                ->withCount('visits')
                 ->orderBy($sort === 'visits' ? 'visits_count' : $sort, $order)
-                ->get();
+                ->get()
+                ->map(function ($station) {
+                    return [
+                        'id' => $station->id,
+                        'name' => $station->name,
+                        'commune' => $station->commune,
+                        'latitude' => $station->latitude,
+                        'longitude' => $station->longitude,
+                        'visits_count' => $station->visits_count,
+                        // tous les statuts disponibles
+                        'fuel_statuses' => $station->fuelTypes->map(function ($fuelType) use ($station) {
+                            $status = $station->statuses->firstWhere('fuel_type_id', $fuelType->id);
+
+                            return [
+                                'fuel_type' => $fuelType->name,
+                                'status' => $status?->status ?? 'inconnu',
+                                'updated_at' => $status?->created_at ?? null,
+                            ];
+                        }),
+                    ];
+                });
         });
+        
+        $this->bustStationCaches(); // pour tout vider
 
         return response()->json($stations);
     }
 
-   public function show($id)
+
+    public function show($id)
     {
         $cacheKey = "station.$id";
 
         $station = Cache::remember($cacheKey, 3600, function () use ($id) {
-            return Station::findOrFail($id);
+            return Station::with(['fuelTypes', 'statuses.fuelType'])
+                ->findOrFail($id);
         });
 
-        // Enregistre la visite
-        StationVisit::create([
+        // 🔥 On reformate la sortie pour avoir les statuts par carburant
+        $formattedStation = [
+            'id' => $station->id,
+            'name' => $station->name,
+            'commune' => $station->commune,
+            'latitude' => $station->latitude,
+            'longitude' => $station->longitude,
+            'status' => $station->status,
+            'fuel_statuses' => $station->fuelTypes->map(function ($fuelType) use ($station) {
+                $status = $station->statuses->firstWhere('fuel_type_id', $fuelType->id);
+
+                return [
+                    'fuel_type' => $fuelType->name,
+                    'status' => $status?->status ?? 'inconnu',
+                    'updated_at' => $status?->created_at ?? null,
+                ];
+            }),
+            'created_at' => $station->created_at,
+            'updated_at' => $station->updated_at,
+        ];
+
+        // Enregistre la visite (si elle n’existe pas déjà aujourd’hui)
+        StationVisit::firstOrCreate([
             'station_id' => $station->id,
             'ip_address' => request()->ip(),
+        ], [
             'device' => request()->header('User-Agent'),
             'commune' => $station->commune,
         ]);
 
-        // On invalide juste le cache analytics, pas la station elle-même
+        // On invalide juste le cache analytics pas la station elle-même
         Cache::forget('stations.analytics');
 
-        return response()->json($station);
+        return response()->json([
+            'message' => 'Détails de la station récupérés avec succès.',
+            'data' => $formattedStation,
+        ]);
     }
+
 }

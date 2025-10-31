@@ -5,6 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
+use App\Models\StationStatus;
+use App\Models\FuelType;
+use App\Models\StationVisit;
+use App\Models\Report;
 
 
 class Station extends Authenticatable
@@ -53,4 +57,5 @@ class Station extends Authenticatable
     {
         return $this->belongsToMany(FuelType::class, 'fuel_type_pivot_station');
     }
+
 }

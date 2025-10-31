@@ -12,7 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use App\Helpers\StationHelper;
 
-class StationRequestController extends Controller
+class AdminRequestController extends Controller
 {
     use StationHelper;
     public function index(Request $request)
@@ -20,7 +20,7 @@ class StationRequestController extends Controller
         $cacheKey = 'stations_list_' . md5(json_encode($request->all()));
 
         $stations = Cache::remember($cacheKey, 300, function () use ($request) {
-            return Station::with('lastStatus')
+            return Station::with(['statuses.fuelType']) // <-- relation vers la table pivot + fuelType
                 ->when($request->has('commune'), fn($q) => $q->where('commune', $request->commune))
                 ->when($request->has('status'), fn($q) => $q->where('status', $request->status))
                 ->orderBy($request->get('sort_by', 'created_at'), $request->get('sort_order', 'desc'))
@@ -31,17 +31,25 @@ class StationRequestController extends Controller
                         'name' => $station->name,
                         'commune' => $station->commune,
                         'type' => $station->type,
-                        'status' => $station->lastStatus?->status ?? 'inconnu',
-                        'updated_at' => $station->lastStatus?->created_at ?? $station->updated_at,
                         'latitude' => $station->latitude,
                         'longitude' => $station->longitude,
                         'is_active' => $station->status === 'approved',
+                        'updated_at' => $station->updated_at,
+                        // Tous les statuts par carburant
+                        'fuel_statuses' => $station->statuses->map(function ($s) {
+                            return [
+                                'fuel_type' => $s->fuelType->name,
+                                'status' => $s->status,
+                                'updated_at' => $s->created_at,
+                            ];
+                        }),
                     ];
                 });
         });
 
         return response()->json($stations);
     }
+
 
     public function stats()
     {
