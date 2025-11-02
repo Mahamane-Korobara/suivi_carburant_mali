@@ -22,9 +22,14 @@ class StoreStationRequest extends FormRequest
             'gerant_name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
             'email' => 'required|email|unique:stations,email',
-            // Le champ 'fuel_types' est maintenant un tableau d’IDs
+            
+            // Types de carburant (array d’IDs)
             'fuel_types' => 'required|array|min:1',
             'fuel_types.*' => 'exists:fuel_types,id',
+            
+            // Coordonnées géographiques
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
         ];
     }
 
@@ -41,6 +46,13 @@ class StoreStationRequest extends FormRequest
             'phone.required' => 'Le champ téléphone est obligatoire.',
             'fuel_types.required' => 'Vous devez sélectionner au moins un type de carburant.',
             'fuel_types.*.exists' => 'Un type de carburant sélectionné est invalide.',
+            'latitude.required' => 'La latitude est obligatoire.',
+            'latitude.numeric' => 'La latitude doit être un nombre.',
+            'latitude.between' => 'La latitude doit être comprise entre -90 et 90.',
+            'longitude.required' => 'La longitude est obligatoire.',
+            'longitude.numeric' => 'La longitude doit être un nombre.',
+            'longitude.between' => 'La longitude doit être comprise entre -180 et 180.',
         ];
     }
+
 }

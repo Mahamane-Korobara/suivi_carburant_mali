@@ -36,41 +36,72 @@ class StationController extends Controller
     {
         $sort = $request->get('sort', 'created_at');
         $order = $request->get('order', 'desc');
-        $cacheKey = "stations.index.$sort.$order";
+        $search = $request->get('search');
+        $fuelFilter = $request->get('fuel');
+        $statusFilter = $request->get('status');
 
-        $stations = Cache::remember($cacheKey, 3600, function () use ($sort, $order) {
-            return Station::with(['statuses.fuelType'])
+        // Clé de cache dynamique
+        $cacheKey = "stations.index.$sort.$order.$search.$fuelFilter.$statusFilter";
+
+        $stations = Cache::remember($cacheKey, 3600, function () use ($sort, $order, $search, $fuelFilter, $statusFilter) {
+            $query = Station::with(['statuses.fuelType', 'fuelTypes'])
                 ->where('status', 'approved')
-                ->withCount('visits')
-                ->orderBy($sort === 'visits' ? 'visits_count' : $sort, $order)
-                ->get()
-                ->map(function ($station) {
-                    return [
-                        'id' => $station->id,
-                        'name' => $station->name,
-                        'commune' => $station->commune,
-                        'latitude' => $station->latitude,
-                        'longitude' => $station->longitude,
-                        'visits_count' => $station->visits_count,
-                        // tous les statuts disponibles
-                        'fuel_statuses' => $station->fuelTypes->map(function ($fuelType) use ($station) {
-                            $status = $station->statuses->firstWhere('fuel_type_id', $fuelType->id);
+                ->withCount('visits');
 
-                            return [
-                                'fuel_type' => $fuelType->name,
-                                'status' => $status?->status ?? 'inconnu',
-                                'updated_at' => $status?->created_at ?? null,
-                            ];
-                        }),
-                    ];
+            // Recherche nom/quartier
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%$search%")
+                        ->orWhere('quartier', 'like', "%$search%");
                 });
+            }
+
+            // Filtre carburant + statut
+            if ($fuelFilter && $statusFilter) {
+                $query->whereHas('statuses', function ($q) use ($fuelFilter, $statusFilter) {
+                    $q->whereHas('fuelType', function ($f) use ($fuelFilter) {
+                        $f->where('name', $fuelFilter);
+                    })->where('status', $statusFilter);
+                });
+            }
+
+            // Tri
+            $stations = $query
+                ->orderBy($sort === 'visits' ? 'visits_count' : $sort, $order)
+                ->get();
+
+            // Formatage final
+            return $stations->map(function ($station) {
+                return [
+                    'id' => $station->id,
+                    'name' => $station->name,
+                    'quartier' => $station->quartier,
+                    'commune' => $station->commune,
+                    'latitude' => $station->latitude,
+                    'longitude' => $station->longitude,
+                    'visits_count' => $station->visits_count,
+                    'fuel_statuses' => $station->fuelTypes->map(function ($fuelType) use ($station) {
+                        $status = $station->statuses->firstWhere('fuel_type_id', $fuelType->id);
+                        $color = match ($status?->status) {
+                            'disponible' => 'green',
+                            'peu' => 'orange',
+                            'rupture' => 'red',
+                            default => 'gray',
+                        };
+
+                        return [
+                            'fuel_type' => $fuelType->name,
+                            'status' => $status?->status ?? 'inconnu',
+                            'color' => $color,
+                            'updated_at' => $status?->created_at ?? null,
+                        ];
+                    }),
+                ];
+            });
         });
-        
-        $this->bustStationCaches(); // pour tout vider
 
         return response()->json($stations);
     }
-
 
     public function show($id)
     {
@@ -81,7 +112,7 @@ class StationController extends Controller
                 ->findOrFail($id);
         });
 
-        // 🔥 On reformate la sortie pour avoir les statuts par carburant
+        // On reformate la sortie pour avoir les statuts par carburant
         $formattedStation = [
             'id' => $station->id,
             'name' => $station->name,
@@ -91,10 +122,17 @@ class StationController extends Controller
             'status' => $station->status,
             'fuel_statuses' => $station->fuelTypes->map(function ($fuelType) use ($station) {
                 $status = $station->statuses->firstWhere('fuel_type_id', $fuelType->id);
+                $color = match ($status?->status) {
+                    'disponible' => 'green',
+                    'peu' => 'orange',
+                    'rupture' => 'red',
+                    default => 'gray',
+                };
 
                 return [
                     'fuel_type' => $fuelType->name,
                     'status' => $status?->status ?? 'inconnu',
+                    'color' => $color,
                     'updated_at' => $status?->created_at ?? null,
                 ];
             }),
@@ -119,5 +157,4 @@ class StationController extends Controller
             'data' => $formattedStation,
         ]);
     }
-
 }
