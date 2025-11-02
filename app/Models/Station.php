@@ -58,4 +58,9 @@ class Station extends Authenticatable
         return $this->belongsToMany(FuelType::class, 'fuel_type_pivot_station');
     }
 
+    public function notifications()
+    {
+        return $this->hasMany(StationNotification::class);
+    }
+
 }

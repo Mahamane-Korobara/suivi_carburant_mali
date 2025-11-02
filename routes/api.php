@@ -9,7 +9,7 @@ use App\Http\Controllers\Admin\DashboardExportController;
 use App\Http\Controllers\Station\StationRequestController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\ReportControllerUsager;
-
+use App\Http\Controllers\Admin\AdminNotificationController;
 
 // Pour les usagers
 Route::get('/public/stations', [StationController::class, 'index']);
@@ -18,7 +18,6 @@ Route::post('/public/stations/{id}/report', [ReportControllerUsager::class, 'sto
 
 // --- Auth Admin ---
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
-    Route::get('/admin/stations/export', [DashboardExportController::class, 'export']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/logout', [AdminAuthController::class, 'logout']);
@@ -31,7 +30,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/stations/reports', [ReportController::class, 'index']);
     Route::get('/admin/stations/reports/{id}', [ReportController::class, 'show']);
     Route::delete('/admin/stations/reports/{id}', [ReportController::class, 'destroy']);
-    // Route::get('/admin/stations/export', [AdminRequestController::class, 'export']);
+    Route::get('/admin/stations/notifications', [AdminNotificationController::class, 'index']);
+    Route::post('/admin/stations/notifications/{id}/read', [AdminNotificationController::class, 'markAsRead']);
+    Route::get('/admin/stations/export', [AdminRequestController::class, 'export']);
     Route::get('/admin/stations/stats', [AdminRequestController::class, 'stats']);
 });
 
