@@ -33,6 +33,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/stations/notifications/{id}/read', [AdminNotificationController::class, 'markAsRead']);
     Route::get('/admin/stations/export', [DashboardExportController::class, 'export']);
     Route::get('/admin/stations/stats', [AdminRequestController::class, 'stats']);
+    Route::get('admin/stations/fuel-stats', [AdminRequestController::class, 'fuelStats']);
 });
 
 // --- Auth Station ---

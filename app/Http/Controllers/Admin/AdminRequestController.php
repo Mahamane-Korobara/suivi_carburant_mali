@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Station;
+use App\Models\StationStatus;
+use App\Models\FuelType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -124,11 +126,96 @@ class AdminRequestController extends Controller
 
         $stats = Cache::remember($cacheKey, 300, function () {
             return [
+                // Stats de base
                 'total' => Station::count(),
                 'approved' => Station::where('status', 'approved')->count(),
                 'rejected' => Station::where('status', 'rejected')->count(),
                 'pending' => Station::where('status', 'pending')->count(),
                 'last_update' => Station::max('updated_at'),
+                
+                // Tendances temporelles
+                'new_this_week' => Station::where('created_at', '>=', Carbon::now()->subWeek())->count(),
+                'new_this_month' => Station::where('created_at', '>=', Carbon::now()->subMonth())->count(),
+                'approved_this_week' => Station::where('status', 'approved')
+                    ->where('updated_at', '>=', Carbon::now()->subWeek())
+                    ->count(),
+                
+                // Taux d'approbation
+                'approval_rate' => Station::whereIn('status', ['approved', 'rejected'])->count() > 0
+                    ? round((Station::where('status', 'approved')->count() / 
+                        Station::whereIn('status', ['approved', 'rejected'])->count()) * 100, 1)
+                    : 0,
+                
+                // Répartition géographique (top 5 communes)
+                'top_communes' => Station::selectRaw('commune, COUNT(*) as total')
+                    ->where('status', 'approved')
+                    ->groupBy('commune')
+                    ->orderByDesc('total')
+                    ->take(5)
+                    ->get(),
+                
+                // Interactions utilisateurs
+                'total_visits' => StationVisit::count(),
+                'visits_today' => StationVisit::whereDate('visited_at', Carbon::today())->count(),
+                'visits_this_week' => StationVisit::where('visited_at', '>=', Carbon::now()->subWeek())->count(),
+            ];
+        });
+
+        return response()->json($stats);
+    }
+
+    public function fuelStats()
+    {
+        $cacheKey = 'fuel_stats';
+
+        $stats = Cache::remember($cacheKey, 300, function () {
+            return [
+                // Stats globales sur les statuts de carburant
+                'total_fuel_points' => StationStatus::count(),
+                'available' => StationStatus::where('status', 'disponible')->count(),
+                'out_of_stock' => StationStatus::where('status', 'rupture')->count(),
+                'limited' => StationStatus::where('status', 'peu')->count(),
+                
+                // Par type de carburant
+                'by_fuel_type' => FuelType::withCount([
+                    'statuses as available_count' => function ($q) {
+                        $q->where('status', 'disponible');
+                    },
+                    'statuses as out_of_stock_count' => function ($q) {
+                        $q->where('status', 'rupture');
+                    },
+                    'statuses as limited_count' => function ($q) {
+                        $q->where('status', 'peu');
+                    },
+                    'statuses as total_count'
+                ])->get()->map(function ($fuel) {
+                    return [
+                        'id' => $fuel->id,
+                        'name' => $fuel->name,
+                        'available' => $fuel->available_count,
+                        'out_of_stock' => $fuel->out_of_stock_count,
+                        'limited' => $fuel->limited_count ?? 0,
+                        'total' => $fuel->total_count,
+                        'availability_rate' => $fuel->total_count > 0 
+                            ? round(($fuel->available_count / $fuel->total_count) * 100, 1)
+                            : 0,
+                    ];
+                }),
+                
+                // Dernières mises à jour de statuts
+                'recent_updates' => StationStatus::with(['station:id,name,commune', 'fuelType:id,name'])
+                    ->orderByDesc('updated_at')
+                    ->take(10)
+                    ->get()
+                    ->map(function ($status) {
+                        return [
+                            'station' => $status->station->name,
+                            'commune' => $status->station->commune,
+                            'fuel' => $status->fuelType->name,
+                            'status' => $status->status,
+                            'updated_at' => $status->updated_at->diffForHumans(),
+                        ];
+                    }),
             ];
         });
 

@@ -15,5 +15,10 @@ class FuelType extends Model
     {
         return $this->belongsToMany(Station::class, 'fuel_type_pivot_station');
     }
+
+    public function statuses()
+    {
+        return $this->hasMany(StationStatus::class);
+    }
 }
 
