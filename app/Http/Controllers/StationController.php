@@ -18,7 +18,7 @@ class StationController extends Controller
         $validated['status'] = 'pending';
 
         // Créer la station
-        $station = \App\Models\Station::create($validated);
+        $station = Station::create($validated);
 
         // Associer les types de carburant sélectionnés
         if (isset($validated['fuel_types'])) {
