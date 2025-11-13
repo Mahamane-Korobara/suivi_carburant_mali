@@ -8,6 +8,7 @@ use App\Models\StationVisit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use App\Helpers\StationHelper;
+use App\Models\FuelType;
 
 class StationController extends Controller
 {
@@ -29,6 +30,16 @@ class StationController extends Controller
             'message' => 'Demande envoyée avec succès. En attente de validation.',
             'data' => $station->load('fuelTypes'),
         ], 201);
+    }
+
+     /**
+     * Récupère tous les types de carburant disponibles
+     */
+    public function typeFuel()
+    {
+        $fuelTypes = FuelType::all(['id', 'name']);
+
+        return response()->json($fuelTypes);
     }
 
     // Consultation des stations

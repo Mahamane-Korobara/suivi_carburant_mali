@@ -22,11 +22,9 @@ class AdminRequestController extends Controller
         $cacheKey = 'stations_list_' . md5(json_encode($request->all()));
 
         $stations = Cache::remember($cacheKey, 300, function () use ($request) {
-            $query = Station::with(['statuses.fuelType']) // <-- relation vers la table pivot + fuelType
-                // filtre base déjà présent
+            $query = Station::with(['statuses.fuelType'])
                 ->when($request->has('commune'), fn($q) => $q->where('commune', $request->commune))
                 ->when($request->has('status'), function ($q) use ($request) {
-                    // accepte status=approved ou status[]=pending&status[]=rejected
                     $statuses = $request->status;
                     if (is_array($statuses)) {
                         $q->whereIn('status', $statuses);
@@ -34,32 +32,26 @@ class AdminRequestController extends Controller
                         $q->where('status', $statuses);
                     }
                 })
-                // tri de base (gardé)
                 ->orderBy($request->get('sort_by', 'created_at'), $request->get('sort_order', 'desc'));
 
-            // --- FILTRES AVANCÉS ---
-
-            // Recherche libre (name OR quartier)
+            // Filtres avancés
             if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('quartier', 'like', "%{$search}%");
+                    ->orWhere('quartier', 'like', "%{$search}%")
+                    ->orWhere('gerant_name', 'like', "%{$search}%");
                 });
             }
 
-            // Filtre exact par quartier (si besoin en plus de commune)
             if ($request->filled('quartier')) {
                 $query->where('quartier', $request->quartier);
             }
 
-            // Filtre par plage de visites (requiert withCount('visits') après)
             if ($request->filled('visits_min') || $request->filled('visits_max')) {
                 $min = $request->get('visits_min');
                 $max = $request->get('visits_max');
-
                 $query->withCount('visits');
-
                 if ($min !== null) {
                     $query->having('visits_count', '>=', (int)$min);
                 }
@@ -68,14 +60,12 @@ class AdminRequestController extends Controller
                 }
             }
 
-            // Filtre par type de carburant disponible (fuel peut être name ou id)
             if ($request->filled('fuel') && $request->filled('status_filter')) {
-                $fuel = $request->fuel; // ex: "Essence" ou id
-                $statusFilter = $request->status_filter; // ex: 'disponible'
+                $fuel = $request->fuel;
+                $statusFilter = $request->status_filter;
                 $query->whereHas('statuses', function ($q) use ($fuel, $statusFilter) {
                     if (is_numeric($fuel)) {
-                        $q->where('fuel_type_id', $fuel)
-                        ->where('status', $statusFilter);
+                        $q->where('fuel_type_id', $fuel)->where('status', $statusFilter);
                     } else {
                         $q->whereHas('fuelType', function ($f) use ($fuel) {
                             $f->where('name', $fuel);
@@ -84,7 +74,6 @@ class AdminRequestController extends Controller
                 });
             }
 
-            // Filtre par date de dernière mise à jour (updated_at)
             if ($request->filled('updated_from')) {
                 $query->where('updated_at', '>=', $request->updated_from);
             }
@@ -92,20 +81,23 @@ class AdminRequestController extends Controller
                 $query->where('updated_at', '<=', $request->updated_to);
             }
 
-            // --- FIN FILTRES AVANCÉS ---
-
             $stations = $query->get();
 
             return $stations->map(function ($station) {
                 return [
                     'id' => $station->id,
                     'name' => $station->name,
+                    'gerant_name' => $station->gerant_name, // ✅ Ajouté
+                    'phone' => $station->phone, // ✅ Ajouté
+                    'email' => $station->email, // ✅ Ajouté
+                    'quartier' => $station->quartier, // ✅ Ajouté
+                    'address' => $station->address, // ✅ Ajouté
                     'commune' => $station->commune,
                     'latitude' => $station->latitude,
                     'longitude' => $station->longitude,
-                    'is_active' => $station->status === 'approved', // affichage seulement
+                    'status' => $station->status, // ✅ Retourner le vrai statut (pending, approved, rejected)
+                    'is_active' => $station->status === 'approved',
                     'updated_at' => $station->updated_at,
-                    // Tous les statuts par carburant
                     'fuel_statuses' => $station->statuses->map(function ($s) {
                         return [
                             'fuel_type' => $s->fuelType->name,

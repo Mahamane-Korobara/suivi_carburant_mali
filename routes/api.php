@@ -14,7 +14,7 @@ use App\Http\Controllers\Admin\AdminNotificationController;
 // Pour les usagers
 Route::get('/public/stations', [StationController::class, 'index']);
 Route::get('/public/stations/{id}', [StationController::class, 'show']);
-
+Route::get('/public/fuel-types', [StationController::class, 'typeFuel']);
 // --- Auth Admin ---
 Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
@@ -40,7 +40,12 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::post('/public/stations/register', [StationController::class, 'register']);
 Route::post('/stations/login', [StationAuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
+    // Gestion des statuts de carburant
+    Route::get('/stations/fuel-statuses', [StationRequestController::class, 'getFuelStatuses']);
     Route::post('/stations/status-change', [StationRequestController::class, 'updateFuelStatus']);
+    Route::get('/stations/fuel-history', [StationRequestController::class, 'getFuelHistory']);
+    
+    // Déconnexion
     Route::post('/stations/logout', [StationAuthController::class, 'logout']);
 });
 
