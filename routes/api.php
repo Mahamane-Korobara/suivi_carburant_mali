@@ -13,6 +13,7 @@ use App\Http\Controllers\Admin\AdminNotificationController;
 
 // Pour les usagers
 Route::get('/public/stations', [StationController::class, 'index']);
+Route::post('/public/stations/{stationId}/report', [ReportControllerUsager::class, 'store']);
 Route::get('/public/stations/{id}', [StationController::class, 'show']);
 Route::get('/public/fuel-types', [StationController::class, 'typeFuel']);
 // --- Auth Admin ---
